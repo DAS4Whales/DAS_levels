@@ -36,7 +36,7 @@ __pycache__/
 *.h5
 
 # Data folder
-data/
+#data/
 
 # Temporary files
 *.tmp
@@ -51,4 +51,4 @@ data/
 # Visual Studio Code
 .vscode/
 
-main_dharriscollab.py
+main_received_levels_paper.py

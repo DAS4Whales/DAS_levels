@@ -2,7 +2,7 @@ import das4whales as dw
 import scipy.signal as sp
 import numpy as np
 from utils.data_handle import find_next_file, load_data, select_channels_m_to_nb
-from utils.dsp import (time_compensation, calc_g_gauge_length_db, calc_g_coupling_db, 
+from utils.dsp import (time_compensation, calc_g_gauge_length_db, calc_g_coupling_db,
                        calc_transmission_loss, calc_parameters, calc_received_strain_level_dB)
 from utils.plot import plot_save_TOA_compensated, get_ticks_dist
 import pandas as pd
@@ -28,8 +28,6 @@ analysis_parameters = {
 }
 
 # Define path to folder with data #TODO: download data  from XXXX
-# TODO: add noise
-
 data_dir = '../data'
 
 # Read csv file dataset_config.csv to get the relevant information dor each dataset
@@ -160,7 +158,12 @@ RL_DAS_Pa_dB = 20 * np.log10(np.mean(abs(trf_fk_align_call), axis=1) / 1e-6) - D
 
 
 # Plot step by step  -------------------------------------
-# Create a figure with 4 subplots
+# Create a figure with 3 subplots
+if dataset == 'OOISouthC1':
+    width = 6
+else:
+    width = 5.45
+
 fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(width, 10), facecolor='none')
 
 # Subplot 1: Depth vs dist
@@ -267,6 +270,14 @@ elif dataset == 'MedSea':
 
 ax1.set_yticks(manual_ticks)
 
+if dataset != 'OOISouthC1':
+    ax1.set_ylabel('')  # Remove x-axis label for ax2
+    ax2.tick_params(axis='y', which='both', left=False, labelleft=False)
+    ax2.set_ylabel('')  # Remove x-axis label for ax2
+    ax3.tick_params(axis='y', which='both', left=False, labelleft=False)
+    ax3.set_ylabel('')  # Remove x-axis label for ax2
+    ax4.tick_params(axis='y', which='both', left=False, labelleft=False)
+    ax4.set_ylabel('')  # Remove x-axis label for ax2
 
 # Adjust layout and save
 plt.tight_layout()
