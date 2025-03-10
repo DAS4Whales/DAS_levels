@@ -128,7 +128,7 @@ trf_fk_align_call = trf_fk_aligned[:,
                     int((analysis_parameters['window_toa_compensation_s']
                          + analysis_parameters[ 'window_response_s']) * fs)]
 
-# Part 2: Response
+# Part 2: Response -----------
 LW = gauge_length
 
 # 1) Calculate the distances and angles
