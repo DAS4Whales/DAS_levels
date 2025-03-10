@@ -1,8 +1,9 @@
 import das4whales as dw
 import scipy.signal as sp
 import numpy as np
-from utils.data_handle import find_next_file, load_data
-from utils.dsp import time_compensation, value_mod_1
+from utils.data_handle import find_next_file, load_data, select_channels_m_to_nb
+from utils.dsp import (time_compensation, calc_g_gauge_length_db, calc_g_coupling_db, 
+                       calc_transmission_loss, calc_parameters, calc_received_strain_level_dB)
 from utils.plot import plot_save_TOA_compensated, get_ticks_dist
 import pandas as pd
 import os
@@ -24,7 +25,6 @@ analysis_parameters = {
     'whale_SL_dB': 189, # dB re 1uPa @1m
     'alpha_cable_fiber': 0.8, #
     'bulk_water': 2.29 * 10 ** 9,
-    'H_multiple': 4, # Regime shift x water colum height ### For Svalbard replace by 8
 }
 
 # Define path to folder with data #TODO: download data  from XXXX
@@ -51,6 +51,7 @@ print(f'List of the datasets names: {list(all_dataset_configs.index)}')
 # Select the dataset to work with 'OOISouthC1' or 'Svalbard' or 'MedSea'
 dataset = 'OOISouthC1'
 dataset_config = all_dataset_configs.loc[dataset]
+analysis_parameters['H_multiple'] = dataset_config['H_multiple']
 
 # Load annotation file to get whale_apex_m, whale_offset_m and start_time_s from it
 annotations = dw.data_handle.load_annotation_csv(os.path.join(data_dir,dataset_config['annotation_file']))
@@ -84,17 +85,8 @@ tr, time, dist, fileBeginTimeUTC, metadata, selected_channels_m = load_data(data
 
 fs_original, dx, nx, ns, gauge_length = metadata["fs"], metadata["dx"], metadata["nx"], metadata["ns"], \
     metadata["GL"]
-print(f'File duration: {ns/fs_original}')
 
-
-selected_channels = [int(selected_channels_m // metadata["dx"]) for selected_channels_m in
-                     selected_channels_m]
-# Adjust to ensure the range created by selected_channels is even length
-if (selected_channels[1] - selected_channels[0]) % selected_channels[2] != 0:
-    # Modify the first value so the length of the range becomes even
-    selected_channels[0] -= 1
-
-print(selected_channels)
+selected_channels = select_channels_m_to_nb(selected_channels_m, metadata)
 
 # Downsample
 tr, fs, time = dw.dsp.resample(tr, fs_original, analysis_parameters['fs_analysis'])
@@ -137,124 +129,33 @@ trf_fk_align_call = trf_fk_aligned[:,
                          + analysis_parameters[ 'window_response_s']) * fs)]
 
 # Part 2: Response
-
-# Get GL and LW
-#GL = metadata['GL']
-#LW =
 LW = gauge_length
 
 # 1) Calculate the distances and angles
-# Depth difference z
-z = np.abs(np.array(position['depth'])) - analysis_parameters['whale_depth_m']
+theta, cos_phi, r, ind_whale_apex = calc_parameters(position, analysis_parameters, whale_position, dist)
 
-# Horizontal distance to the closest channel hy
-hy = whale_position['offset']
-
-# Distance between apex and channels, hx
-# Find the index of whale_apex_m in dist
-ind_whale_apex = np.where(dist >= whale_position['apex'])[0][0]
-
-# Correct the whale offset if 0, becomes depth-whale depth
-whale_offset_m_temp = int(np.floor(np.array(position['depth'])[ind_whale_apex] - analysis_parameters['whale_depth_m']))
-if whale_position['offset'] <= whale_offset_m_temp:
-    whale_offset_m = whale_offset_m_temp
-
-# Calculate hx using the coordinates
-whale_pos_projected_DAS = {
-    'lat': position['lat'][ind_whale_apex],
-    'lon': position['lon'][ind_whale_apex],
-}
-hx = dw.spatial.calc_dist_lat_lon(whale_pos_projected_DAS, position)
-
-# Calculate r (distance from whale position to cable positions)
-# Get the bearing of the DAS cable around whale position
-step = 3
-DAS_bearing = dw.spatial.calc_das_section_bearing(
-    position['lat'][ind_whale_apex - step],
-    position['lon'][ind_whale_apex - step],
-    position['lat'][ind_whale_apex + step],
-    position['lon'][ind_whale_apex + step])
-
-# Get the whale position
-whale_position['lat'], whale_position['lon'] = dw.spatial.calc_source_position_lat_lon(
-    position['lat'][ind_whale_apex],
-    position['lon'][ind_whale_apex],
-    whale_position['offset'],
-    DAS_bearing,
-    whale_position['side'])
-r = dw.spatial.calc_dist_lat_lon(whale_position, position)
-
-# Grazing angle on the fiber, theta
-theta = np.arccos(value_mod_1(hx / r))  # in rad
-
-# The vertical angle, Phi
-cos_phi = z / r
-
-# 3)  Received level at the cable
-# Propagation (geometrical spreading + interference from Lloyd's)
-g_lme = 2 * np.sin(2 * np.pi * analysis_parameters['whale_freq'] * analysis_parameters['whale_depth_m'] * cos_phi / analysis_parameters['sound_speed'])
-g_spherical =  1/r
-TL_water_spherical_dB =  20 * np.log10(g_lme) + 20 * np.log10(g_spherical)
-
-g_cylindrical = 1 / np.sqrt(r)
-TL_water_cylindrical_dB =  20 * np.log10(g_cylindrical)
-
-# Regime shift at 4 x the height of the water column at the whale location
-g_regime_shift = g_spherical
-TL_water_regime_shift_dB = 20 * np.log10(g_lme) + 20 * np.log10(g_regime_shift)
-
-# going in the negative dist
-try:
-    r_negative = r[0:ind_whale_apex]
-    ind_regime_shift_negative = ind_whale_apex - 1 - np.where(
-        r_negative[::-1] >= analysis_parameters['H_multiple'] * position['depth'][ind_whale_apex])[0][0]
-    TL_water_regime_shift_dB[0:ind_regime_shift_negative] = -10 * np.log10(
-        r[ind_regime_shift_negative + 1]) + 20 * np.log10(
-        g_lme[ind_regime_shift_negative + 1]) - 10 * np.log10(r[0:ind_regime_shift_negative])
-except:
-    print('No regime shift')
-try:
-    # going in the positive r
-    r_positive = r[ind_whale_apex:]
-    ind_regime_shift_positive = ind_whale_apex + \
-                                np.where(r_positive >= analysis_parameters['H_multiple'] * position['depth'][ind_whale_apex])[0][0]
-    TL_water_regime_shift_dB[ind_regime_shift_positive:] = -10 * np.log10(
-        r[ind_regime_shift_positive - 1]) + 20 * np.log10(
-        g_lme[ind_regime_shift_positive - 1]) - 10 * np.log10(r[ind_regime_shift_positive:])
-except:
-    print('No regime shift')
+# 2)  Received level at the cable
+# transmisison loss
+transmisison_loss_db_dict = calc_transmission_loss(position, cos_phi, r, analysis_parameters, ind_whale_apex)
 
 # Conversion strain to Pa
-G_strain_to_pa = 20 * np.log10(analysis_parameters['bulk_water'])
+g_strain_to_pa_db = 20 * np.log10(analysis_parameters['bulk_water'])
 
 # Coupling between cable and fiber
-g_coup_fiber_cable = (0.7 * np.cos(theta) ** 2 - 0.2 * analysis_parameters['alpha_cable_fiber'] * np.sin(theta) ** 2)
+g_coupling_db = calc_g_coupling_db(theta, analysis_parameters)
 
 # Effect of the gauge length
-g_GL = (np.sin((np.pi * analysis_parameters['whale_freq'] / analysis_parameters['sound_speed']) * gauge_length * np.cos(theta)) / (
-            (np.pi * analysis_parameters['whale_freq'] / analysis_parameters['sound_speed']) * gauge_length * np.cos(theta))) * (
-                   np.sin((np.pi * analysis_parameters['whale_freq'] / analysis_parameters['sound_speed']) * LW * np.cos(theta)) / (
-                       (np.pi * analysis_parameters['whale_freq'] / analysis_parameters['sound_speed']) * LW * np.cos(theta)))
+g_gauge_length_db = calc_g_gauge_length_db(theta, analysis_parameters, gauge_length, LW)
 
-# Receive level on DAS (strain)
-RL_DAS_spherical_dB = analysis_parameters['whale_SL_dB'] + TL_water_spherical_dB + 20 * np.log10(g_GL) + 20 * np.log10(
-    g_coup_fiber_cable) - G_strain_to_pa
-
-RL_DAS_cylindrical_dB =  analysis_parameters['whale_SL_dB'] + TL_water_cylindrical_dB  + 20 * np.log10(g_GL) + 20 * np.log10(
-    g_coup_fiber_cable) - G_strain_to_pa
-
-RL_DAS_regime_shift_dB = analysis_parameters['whale_SL_dB'] + TL_water_regime_shift_dB + 20 * np.log10(g_GL) + 20 * np.log10(
-    g_coup_fiber_cable) - G_strain_to_pa
-
+# 3) Receive level on DAS (strain)
+received_level_db_dict = calc_received_strain_level_dB(analysis_parameters, transmisison_loss_db_dict, g_gauge_length_db,
+                                                  g_coupling_db, g_strain_to_pa_db)
 # DAS Response
-DAS_response = 20 * np.log10(g_GL) + 20 * np.log10(g_coup_fiber_cable) #- attenuation_DAS * dist / 1000
+DAS_response = g_gauge_length_db + g_coupling_db#- attenuation_DAS * dist / 1000
 
-# Receive level on DAS (dB Pa)
-RL_DAS_Pa_dB = 20 * np.log10(np.mean(abs(trf_fk_align_call), axis=1) / 1e-6) - DAS_response + G_strain_to_pa
+# 4) Receive level on DAS (dB Pa)
+RL_DAS_Pa_dB = 20 * np.log10(np.mean(abs(trf_fk_align_call), axis=1) / 1e-6) - DAS_response + g_strain_to_pa_db
 
-# Finding an offset to plot the theroretical curves
-mean_resp = np.mean(abs(trf_fk_align_call), axis=1)
-offset_curves = np.mean(20 * np.log10(mean_resp[mean_resp > 0] / 1e-6)) + 40
 
 # Plot step by step  -------------------------------------
 # Create a figure with 3 subplots
@@ -262,8 +163,10 @@ if dataset == 'OOISouthC1':
     width = 6
 else:
     width = 5.45
+
 fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, 1, figsize=(width, 10), facecolor='none')
 
+# Subplot 1: Depth vs dist
 ax1.plot(dist/ 1000, abs(np.array(position['depth'])), color='orangered')
 ax1.set_ylabel('Depth (m)', color='k', fontsize = fontsize)
 ax1.invert_yaxis()
@@ -281,12 +184,18 @@ for tick in ax1.yaxis.get_major_ticks():
 
 ax1.grid()
 
-# Plot 2: Received level fiber
+# Subplot 2: Acoustic received levels on the fiber
 # Transmission loss and Lloyds Mirror effect
-ax2.plot(dist / 1000, analysis_parameters['whale_SL_dB'] + TL_water_spherical_dB, 'steelblue', label=r'$RL_{dB \; re. 1\mu Pa} \; (r_T \to \infty)$')
-ax2.plot(dist / 1000, analysis_parameters['whale_SL_dB'] + TL_water_cylindrical_dB - 30, 'steelblue', linestyle='dashed',
+ax2.plot(dist / 1000,
+         analysis_parameters['whale_SL_dB'] + transmisison_loss_db_dict['spherical'],
+         'steelblue', label=r'$RL_{dB \; re. 1\mu Pa} \; (r_T \to \infty)$')
+ax2.plot(dist / 1000,
+         analysis_parameters['whale_SL_dB'] + transmisison_loss_db_dict['cylindrical'] - 30,
+         'steelblue', linestyle='dashed',
          label=r'$RL_{dB \; re. 1\mu Pa} \; (r_T \to 1) - 30 \;$ dB')
-ax2.plot(dist / 1000, analysis_parameters['whale_SL_dB'] + TL_water_regime_shift_dB, 'k', label=r'$RL_{dB \; re. 1\mu Pa}}$')
+ax2.plot(dist / 1000,
+         analysis_parameters['whale_SL_dB'] + transmisison_loss_db_dict['regime_shift'],
+         'k', label=r'$RL_{dB \; re. 1\mu Pa}}$')
 
 # Labels
 ax2.tick_params( labelsize=fontsize_vals)
@@ -301,11 +210,11 @@ ax2.set_ylim([95, 153])  # For the global plot
 ax2.set_xlim([dist[0] / 1000, dist[-1] / 1000])
 ax2.grid()
 
-# Plot 2: DAS Response (strain)
+# Subplot 3: DAS Response (strain)
 # Coupling
-ax3.plot(dist / 1000, 20 * np.log10(g_coup_fiber_cable), 'maroon', label='$G_{\kappa}$')
+ax3.plot(dist / 1000, g_coupling_db, 'maroon', label='$G_{\kappa}$')
 # Gauge length
-ax3.plot(dist / 1000, 20 * np.log10(g_GL), 'indianred', linestyle='dashdot', label='$G_{GL}$')
+ax3.plot(dist / 1000, g_gauge_length_db, 'indianred', linestyle='dashdot', label='$G_{GL}$')
 # Combined
 ax3.plot(dist / 1000, DAS_response, 'k', label=r'$H_{DAS_{\varepsilon}}$')
 
@@ -321,14 +230,14 @@ ax3.set_ylim([-25, 5])  # For the global plot
 ax3.set_xlim([dist[0] / 1000, dist[-1] / 1000])
 ax3.grid()
 
-# Plot 3: Total RL reference in strain
-#ax4.plot(dist / 1000, 20 * np.log10(np.mean(abs(noise), axis=1) / 1e-6), ### FOR OOI replace by dist_noise
-#         label=r'$NL_{dB \; re. 1\mu \varepsilon} \;$ Measured', color='slategrey', alpha = 0.8, linewidth = 0.5)
+# Subplot 4: Total RL reference in strain
+# Plot the time-compensated call
 ax4.plot(dist / 1000, 20 * np.log10(np.mean(abs(trf_fk_align_call), axis=1) / 1e-6),
          label=r'$RL_{dB \; re. 1\mu \varepsilon} \;$ Measured', color='orangered')
 
 # Plot the regime shift
-ax4.plot(dist / 1000, RL_DAS_regime_shift_dB, 'k', label=r'$RL_{dB \; re. 1\mu \varepsilon} \;$ Simulated, $S_{Pa \to \varepsilon} = 187.2$ dB')
+ax4.plot(dist / 1000, received_level_db_dict['regime_shift'], 'k',
+         label=r'$RL_{dB \; re. 1\mu \varepsilon} \;$ Simulated, $S_{Pa \to \varepsilon} = 187.2$ dB')
 
 
 # Labels

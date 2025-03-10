@@ -202,18 +202,7 @@ def load_data(interrogator, file, selected_channels_m, sensitivity=('default', N
             metadata = dw.data_handle.get_acquisition_parameters(file, interrogator='optasense')
 
         # Select the channels
-        selected_channels_m[2] = round(selected_channels_m[2] / metadata["dx"]) * metadata["dx"]
-        selected_channels = [int(selected_channels_m // metadata["dx"]) for selected_channels_m in
-                             selected_channels_m]  # list of values in channel number (spatial sample) corresponding to the starting, ending and step wanted
-        # channels along the FO Cable
-        # selected_channels = [ChannelStart, ChannelStop, ChannelStep] in channel
-        # numbers
-        # Adjust to ensure the range created by selected_channels is even length
-        if (selected_channels[1] - selected_channels[0]) % selected_channels[2] != 0:
-            # Modify the first value so the length of the range becomes even
-            selected_channels[0] -= 1
-
-        print(selected_channels)
+        selected_channels = select_channels_m_to_nb(selected_channels_m, metadata)
 
         # Loads the data using the pre-defined selected channels.
         if isinstance(file,list):
@@ -242,17 +231,24 @@ def load_data(interrogator, file, selected_channels_m, sensitivity=('default', N
             raise ValueError("The first element of the tuple must be 'default' or 'custom'.")
 
         # 3) Select the channels
-        selected_channels_m[2] = round(selected_channels_m[2] / metadata["dx"]) * metadata["dx"]
-        selected_channels = [int(selected_channels_m // metadata["dx"]) for selected_channels_m in
-                             selected_channels_m]  # list of values in channel number (spatial sample) corresponding to the starting, ending and step wanted
-                                                    # channels along the FO Cable
-                                                    # selected_channels = [ChannelStart, ChannelStop, ChannelStep] in channel
-                                                    # numbers
+        selected_channels = select_channels_m_to_nb(selected_channels_m, metadata)
 
         # 4) Load the data using the pre-defined selected channels.
         tr, time, dist, fileBeginTimeUTC = load_multiple_asn_data(file, selected_channels, metadata)
 
     return tr, time, dist, fileBeginTimeUTC, metadata, selected_channels_m
+
+def select_channels_m_to_nb(selected_channels_m,metadata):
+    selected_channels_m[2] = round(selected_channels_m[2] / metadata["dx"]) * metadata["dx"]
+    selected_channels = [int(selected_channels_m // metadata["dx"]) for selected_channels_m in
+                         selected_channels_m]
+
+    # Adjust to ensure the range created by selected_channels is even length
+    if (selected_channels[1] - selected_channels[0]) % selected_channels[2] != 0:
+        # Modify the first value so the length of the range becomes even
+        selected_channels[0] -= 1
+    return selected_channels
+
 
 
 
