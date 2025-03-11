@@ -1,6 +1,6 @@
 # Jupyter notebooks
 .ipynb_checkpoints
-DAS4Whales_ExampleNotebook.ipynb
+*.ipynb
 
 # Development jupyter notebooks
 devnotebooks/
@@ -34,9 +34,10 @@ __pycache__/
 
 # HDF5 data files
 *.h5
+*.hdf5
 
 # Data folder
-#data/
+data/
 
 # Temporary files
 *.tmp
