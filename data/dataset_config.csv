@@ -1,4 +1,0 @@
-dataset,interrogator,selected_channels_m,sensitivity,file_duration_s,H_multiple,das_data_file,annotation_file,position_file,export_folder
-MedSea,asn,"[3050, 53050, 8]","('custom', 9372415)",10,4,DAS_MedSea/data/091304.hdf5,DAS_MedSea/annotations/DAS_MedSea_fin_whale_annotations.csv,DAS_MedSea/DASPosition/MEUST_WGS84_latlondepth_corrected.txt,DAS_MedSea/toa_compensated_fin_whales_20Hz/
-OOISouthC1,optasense,"[15000, 65000, 8]","('default', None)",60,4,DAS_OOI_South/data/South-C1-LR-95km-P1kHz-GL50m-SP2m-FS200Hz_2021-11-02T190014Z.h5,DAS_OOI_South/annotations/OOI_GL_50m_SouthC1_fin_whale_annotations.csv,DAS_OOI_South/DASPosition/south_DAS_latlondepth.txt,DAS_OOI_South/toa_compensated_fin_whales_20Hz/
-Svalbard,Asn,"[40000, 100000, 8]","('default', None)",10,8,DAS_Svalbard/data/123957.hdf5,DAS_Svalbard/annotations/Svalbard_fin_whale_annotations.csv,DAS_Svalbard/DASPosition/Svalbard_DAS_latlondepth.txt,DAS_Svalbard/toa_compensated_fin_whales_20Hz/
