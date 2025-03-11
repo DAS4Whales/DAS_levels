@@ -2,7 +2,9 @@ import das4whales as dw
 import scipy.signal as sp
 import numpy as np
 from utils.plot import plot_save_TOA_compensated, get_ticks_dist
+from utils.data_handle import load_data, select_channels_m_to_nb
 import os
+safe_val = 1e-12
 
 def value_mod_1(x):
     """
@@ -48,6 +50,59 @@ def time_compensation(trf_fk, analysis_parameters, toa_th, start_time_s, plot=Fa
         trf_fk_aligned[dd, :] = np.concatenate((zeros_prepend, trf_fk_call[dd, :], zeros_append), axis=0)
 
     return trf_fk_aligned
+
+def process_noise(noise, data_dir, toa_th, dataset_config, analysis_parameters, time_dim, plot=False):
+    tr, time, dist, fileBeginTimeUTC, metadata, selected_channels_m = load_data(dataset_config['interrogator'],
+                                                                                os.path.join(data_dir, noise['file']),
+                                                                                dataset_config['selected_channels_m'],
+                                                                                sensitivity=dataset_config[
+                                                                                    'sensitivity'])
+    fs_original, dx, nx, ns, gauge_length = metadata["fs"], metadata["dx"], metadata["nx"], metadata["ns"], \
+        metadata["GL"]
+
+    selected_channels = select_channels_m_to_nb(selected_channels_m, metadata)
+
+    # Downsample
+    tr, fs, time = dw.dsp.resample(tr, fs_original, analysis_parameters['fs_analysis'])
+
+    # added these lines specifically for the MedSea data -- not all the files are the same length
+    if dataset_config['interrogator'] == 'asn':
+        if time_dim > np.shape(tr)[1]:
+            tr = np.pad(tr, ((0, 0), (0, time_dim-np.shape(tr)[1])), mode='constant', constant_values=0)
+        elif time_dim < np.shape(tr)[1]:
+            tr = tr[:,:time_dim]
+
+    # Filter
+    # Create the f-k filter
+    fk_filter = dw.dsp.hybrid_ninf_filter_design((tr.shape[0], tr.shape[1]), selected_channels, dx, fs,
+                                                 cs_min=1300, cp_min=1450, cp_max=3300, cs_max=3450, fmin=14,
+                                                 fmax=30,
+                                                 display_filter=False)
+
+    # Apply the f-k filter to the data, returns spatio-temporal strain matrix
+    trf_fk = dw.dsp.fk_filter_sparsefilt(tr, fk_filter, tapering=False)
+
+    # TOA compensation to get the response
+    trf_fk_aligned = time_compensation(trf_fk, analysis_parameters, toa_th, noise['start_time_s'])
+
+    if plot:
+        # Save the time-compensated image
+        filename = 'TOA_compensated_noise_' + fileBeginTimeUTC.strftime("%Y%m%d-%H%M%S") + '.png'
+        plot_save_TOA_compensated(sp.hilbert(trf_fk_aligned, axis=1), dist,
+                                  analysis_parameters['window_toa_compensation_s'],
+                                  file_begin_time_utc=fileBeginTimeUTC,
+                                  fig_size=(12, 10), v_min=0, v_max=0.4,
+                                  ticks_distance_km=get_ticks_dist(selected_channels_m),
+                                  Save=[True, filename])
+        print(f"figure {filename} saved")
+
+    #  Response on the fiber
+    trf_fk_align_noise = trf_fk_aligned[:,
+                         int(analysis_parameters['window_toa_compensation_s'] * fs):
+                         int((analysis_parameters['window_toa_compensation_s']
+                              + analysis_parameters['window_response_s']) * fs)]
+    return trf_fk_align_noise
+
 def calc_parameters(position, analysis_parameters, whale_position, dist):
     # Depth difference z
     z = np.abs(np.array(position['depth'])) - analysis_parameters['whale_depth_m']
@@ -114,7 +169,7 @@ def calc_g_gauge_length_db(theta, analysis_parameters, gauge_length, LW):
 
 def calc_g_coupling_db(theta, analysis_parameters):
     g_coup_fiber_cable = (0.7 * np.cos(theta) ** 2 - 0.2 * analysis_parameters['alpha_cable_fiber'] * np.sin(theta) ** 2)
-    return 20*np.log10(g_coup_fiber_cable)
+    return 20*np.log10(np.clip(g_coup_fiber_cable, safe_val, None))
 
 def calc_transmission_loss(position, cos_phi, r, analysis_parameters, ind_whale_apex):
     g_lme = 2 * np.sin(2 * np.pi * analysis_parameters['whale_freq'] * analysis_parameters['whale_depth_m'] * cos_phi /
@@ -158,7 +213,7 @@ def calc_transmission_loss(position, cos_phi, r, analysis_parameters, ind_whale_
     }
     return tl_db_dict
 
-def calc_received_strain_level_dB(analysis_parameters, tl_db_dict, g_gauge_length_db, g_coupling_db, g_strain_to_pa_db):
+def calc_received_strain_level_db(analysis_parameters, tl_db_dict, g_gauge_length_db, g_coupling_db, g_strain_to_pa_db):
     RL_DAS_spherical_dB = analysis_parameters['whale_SL_dB'] + tl_db_dict[
         'spherical'] + g_gauge_length_db + g_coupling_db - g_strain_to_pa_db
 
