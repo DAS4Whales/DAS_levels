@@ -6,11 +6,11 @@
 ## About DAS Levels 
 This GitHub repository was created to support this paper [Link published paper].
 We used this repository to investigate DAS received levels formalized as 
-$ RL_{\text{dB re.} 1\mu\varepsilon}  = 
+$$ RL_{\text{dB re.} 1\mu\varepsilon}  = 
 RL_{\text{dB re.} 1\mu\text{Pa}} + 
 S_{\text{Pa} \to \varepsilon} + 
 H_{\text{DAS}_{\varepsilon}}
-$
+$$
 where $RL_{\text{dB re.} 1\mu \text{Pa}}$ is the received pressure level in dB re 1$\mu$Pa, 
 $S_{\text{Pa} \to \varepsilon}$ denotes the conversion term in dB between acoustic pressure and the strain 
 measured by DAS, and $H_{\text{DAS}_{\varepsilon}}$ denotes DAS's response in dB relative to strain.
