@@ -1,5 +1,5 @@
 # DAS Levels
-
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.15008957.svg)](https://doi.org/10.5281/zenodo.15008957)
 [![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-blue)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 
 <!-- SPHINX-START -->
