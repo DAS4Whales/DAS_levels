@@ -38,6 +38,7 @@ __pycache__/
 # HDF5 data files
 *.h5
 *.hdf5
+.zip
 
 # Data folder
 data/
