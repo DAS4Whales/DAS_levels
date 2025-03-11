@@ -3,7 +3,7 @@
 *.ipynb
 
 #Dev code
-main_received_levels_paper.py
+scripts/main_received_levels_paper.py
 
 # Development jupyter notebooks
 devnotebooks/
