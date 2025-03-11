@@ -14,7 +14,7 @@ where:
 - H_(DAS_ϵ) denotes DAS's response in dB relative to strain.
 
 Our work used labeled (apex, offset, start time) fin whale 20 Hz call dataset, available in open access through 
-[Zenodo][https://doi.org/10.5281/zenodo.15008560]
+[Zenodo](https://doi.org/10.5281/zenodo.15008560)
 
 This repository extensively uses functions from [DAS4Whales](https://github.com/DAS4Whales/DAS4Whales), a Python library to analyze 
 Distributed Acoustic Sensing (DAS) data for marine bioacoustics.
@@ -37,7 +37,7 @@ for instrument-specific variations in output, isolate fin whale 20~Hz calls and 
 the source-receiver geometry. 
 
 ### Labeled datasets
-We recommend to download our openly accessible labeled dataset [openly accessible labeled dataset][https://doi.org/10.5281/zenodo.15008560]
+We recommend to download our openly accessible labeled dataset [openly accessible labeled dataset](https://doi.org/10.5281/zenodo.15008560),
 
 Data were labeled using a custom annotation app: [DASSourceLocator](https://github.com/leabouffaut/DASSourceLocator). 
 The annotator defined the apex (channel of the first time of arrival), offset (distance between the whale and the 
